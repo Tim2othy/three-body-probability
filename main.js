@@ -394,18 +394,19 @@ function renderDensity() {
 }
 
 function renderBBoxes() {
+    const pct = 0.05; // clip bottom/top 5% → 90% box
     for (let b = 0; b < 3; b++) {
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const xs = [], ys = [];
         for (let e = 0; e < N; e++) {
-            const wx = ensemble[e * STRIDE + b * 2];
-            const wy = ensemble[e * STRIDE + b * 2 + 1];
-            if (wx < minX) minX = wx;
-            if (wx > maxX) maxX = wx;
-            if (wy < minY) minY = wy;
-            if (wy > maxY) maxY = wy;
+            xs.push(ensemble[e * STRIDE + b * 2]);
+            ys.push(ensemble[e * STRIDE + b * 2 + 1]);
         }
-        const [x0, y0] = worldToScreen(minX, maxY); // top-left (maxY = top in screen)
-        const [x1, y1] = worldToScreen(maxX, minY); // bottom-right
+        xs.sort((a, z) => a - z);
+        ys.sort((a, z) => a - z);
+        const lo = Math.floor(pct * N);
+        const hi = Math.ceil((1 - pct) * N) - 1;
+        const [x0, y0] = worldToScreen(xs[lo], ys[hi]); // top-left (ys[hi] = maxY = top in screen)
+        const [x1, y1] = worldToScreen(xs[hi], ys[lo]); // bottom-right
         const [cr, cg, cb] = BODY_RGB[b];
         ctx.strokeStyle = `rgba(${(cr * 255) | 0},${(cg * 255) | 0},${(cb * 255) | 0},0.85)`;
         ctx.lineWidth = 2;
