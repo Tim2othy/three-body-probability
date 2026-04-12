@@ -199,7 +199,7 @@ let softeningEps = 0.35;
 // INITIALIZATION
 // ════════════════════════════════════════════════════════════════
 
-let currentPreset = 'figure8';
+let currentPreset = 'random';
 const PRESETS = makePresets();
 
 function gaussianRand() {
