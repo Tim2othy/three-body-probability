@@ -294,7 +294,7 @@ input[type=range]::-webkit-slider-thumb:hover { background: #5566cc; }
       <span class="ctrl-value" id="val-speed">8×</span>
     </div>
     <div class="ctrl-row">
-      <span class="ctrl-label">Trail fade</span>
+      <span class="ctrl-label">Trail fade (trail mode)</span>
       <input type="range" id="sl-fade" min="0.88" max="0.999" value="0.97" step="0.002">
       <span class="ctrl-value" id="val-fade">0.970</span>
     </div>
@@ -336,9 +336,9 @@ input[type=range]::-webkit-slider-thumb:hover { background: #5566cc; }
     </div>
     <div class="check-row">
       <input type="checkbox" id="cb-trails" checked>
-      <label for="cb-trails">Show probability trails</label>
+      <label for="cb-trails">Accumulate trail history</label>
     </div>
-    <div class="tip">Drag to pan · Scroll to zoom</div>
+    <div class="tip">Default: snapshot of current positions.<br>Trail mode accumulates history with decay.<br>Drag to pan · Scroll to zoom</div>
   </div>
 
   <!-- Stats -->
@@ -710,18 +710,22 @@ function splat(px, py, cr, cg, cb, amount) {
 }
 
 function renderDensity() {
-  const fade = fadeFactor;
-  const buf  = densityBuf;
-  const len  = buf.length;
+  const buf = densityBuf;
+  const len = buf.length;
 
-  // Decay existing density
-  for (let i = 0; i < len; i++) buf[i] *= fade;
-
-  // Per-member contribution calibrated so:
-  //   steady-state density with fraction f of N at one pixel = f * sensitivity
-  //   display saturates (255) when density >= 255
-  //   so saturation at f = 255/sensitivity (e.g. sens=8 → 12% of ensemble saturates)
-  const perMember = sensitivity * (1 - fade) * 255 / N;
+  let perMember;
+  if (showTrails) {
+    // Trail/history mode: decay old density and accumulate current frame on top.
+    // Steady-state: fraction f of N at one pixel → brightness = f * sensitivity.
+    const fade = fadeFactor;
+    for (let i = 0; i < len; i++) buf[i] *= fade;
+    perMember = sensitivity * (1 - fade) * 255 / N;
+  } else {
+    // Snapshot mode: clear buffer and show only WHERE ensemble members ARE RIGHT NOW.
+    // 100% of ensemble at one pixel → brightness saturates at sensitivity = 1.
+    buf.fill(0);
+    perMember = sensitivity * 255 / N;
+  }
 
   for (let e = 0; e < N; e++) {
     const base = e * STRIDE;
@@ -840,12 +844,7 @@ function frame() {
       simTime += DT;
     }
 
-    if (showTrails) {
-      renderDensity();
-    } else {
-      clearCanvas();
-    }
-
+    renderDensity(); // always render current probability mass (snapshot or trail mode)
     if (showNominal) renderNominal();
 
     frameCount++;
