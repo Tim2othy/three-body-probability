@@ -185,7 +185,7 @@ function rk4Step(s_in, s_out, m, dt, eps) {
 // SIMULATION STATE
 // ════════════════════════════════════════════════════════════════
 
-let N = 250;
+let N = 500;
 let masses = [1, 1, 1];
 let ensemble;    // Float64Array [N * STRIDE]
 let ensembleTmp; // Float64Array [N * STRIDE] — swap buffer
@@ -193,7 +193,7 @@ let nominal;     // Float64Array [STRIDE]
 let nominalTmp;  // Float64Array [STRIDE]
 let simTime = 0;
 let perturbScale = 1e-4;
-let softeningEps = 0.05;
+let softeningEps = 0.35;
 
 // ════════════════════════════════════════════════════════════════
 // INITIALIZATION
