@@ -285,6 +285,7 @@ let fadeFactor = 0.97;
 let sensitivity = 2.0;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
+let showBBox = false;
 
 function resize() {
     W = canvas.width = canvas.offsetWidth;
@@ -392,6 +393,28 @@ function renderDensity() {
     ctx.putImageData(imgData, 0, 0);
 }
 
+function renderBBoxes() {
+    for (let b = 0; b < 3; b++) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (let e = 0; e < N; e++) {
+            const wx = ensemble[e * STRIDE + b * 2];
+            const wy = ensemble[e * STRIDE + b * 2 + 1];
+            if (wx < minX) minX = wx;
+            if (wx > maxX) maxX = wx;
+            if (wy < minY) minY = wy;
+            if (wy > maxY) maxY = wy;
+        }
+        const [x0, y0] = worldToScreen(minX, maxY); // top-left (maxY = top in screen)
+        const [x1, y1] = worldToScreen(maxX, minY); // bottom-right
+        const [cr, cg, cb] = BODY_RGB[b];
+        ctx.strokeStyle = `rgba(${(cr * 255) | 0},${(cg * 255) | 0},${(cb * 255) | 0},0.85)`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    }
+    ctx.setLineDash([]);
+}
+
 function renderNominal() {
     const s = nominal;
     for (let b = 0; b < 3; b++) {
@@ -484,6 +507,7 @@ function frame() {
         }
 
         renderDensity(); // always render current probability mass (snapshot or trail mode)
+        if (showBBox) renderBBoxes();
         if (showNominal) renderNominal();
 
         frameCount++;
@@ -588,6 +612,9 @@ function setup() {
     });
 
     // ── Checkboxes
+    document.getElementById('cb-bbox').addEventListener('change', function () {
+        showBBox = this.checked;
+    });
     document.getElementById('cb-nominal').addEventListener('change', function () {
         showNominal = this.checked;
     });
