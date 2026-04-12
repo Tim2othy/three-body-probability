@@ -353,7 +353,6 @@ function renderDensity() {
         perMember = sensitivity * (1 - fade) * 255 / N * zoomComp;
     } else {
         // Snapshot mode: clear buffer and show only WHERE ensemble members ARE RIGHT NOW.
-        // 100% of ensemble at one pixel → brightness saturates at sensitivity = 1.
         buf.fill(0);
         perMember = sensitivity * 255 / N * zoomComp;
     }
