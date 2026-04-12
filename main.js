@@ -313,12 +313,20 @@ function worldToScreen(wx, wy) {
     ];
 }
 
-// 3x3 splat kernel — [dx, dy, weight]
-const KERNEL = [
-    [-1, -1, 0.08], [0, -1, 0.30], [1, -1, 0.08],
-    [-1, 0, 0.30], [0, 0, 1.00], [1, 0, 0.30],
-    [-1, 1, 0.08], [0, 1, 0.30], [1, 1, 0.08],
-];
+// 11×11 Gaussian splat kernel (σ=2.5 px) — [dx, dy, weight]
+// Larger kernel means each particle contributes to ~100 pixels instead of 9,
+// making the density visible even when the ensemble is sparse or tightly clustered.
+const KERNEL = (() => {
+    const entries = [];
+    const inv2s2 = 1 / (2 * 2.5 * 2.5); // 1/(2σ²), σ=2.5
+    for (let dy = -5; dy <= 5; dy++) {
+        for (let dx = -5; dx <= 5; dx++) {
+            const w = Math.exp(-(dx * dx + dy * dy) * inv2s2);
+            if (w > 0.01) entries.push([dx, dy, w]);
+        }
+    }
+    return entries;
+})();
 
 function splat(px, py, cr, cg, cb, amount) {
     const ipx = px | 0, ipy = py | 0;
@@ -363,21 +371,22 @@ function renderDensity() {
             const wx = ensemble[base + b * 2];
             const wy = ensemble[base + b * 2 + 1];
             const [sx, sy] = worldToScreen(wx, wy);
-            if (sx < -2 || sx >= W + 2 || sy < -2 || sy >= H + 2) continue;
+            if (sx < -6 || sx >= W + 6 || sy < -6 || sy >= H + 6) continue;
             const col = BODY_RGB[b];
             splat(sx, sy, col[0], col[1], col[2], perMember);
         }
     }
 
-    // Gamma tone-map: pow(x/255, 0.55) * 255 → reveals low-density regions
+    // Gamma tone-map: lower exponent = more aggressive boost of dim regions.
+    // 0.35 makes even 1 particle out of 500 clearly visible against the black background.
     const data = imgData.data;
     for (let i = 0; i < W * H; i++) {
         const bi = i * 3, pi = i * 4;
         const r = buf[bi], g = buf[bi + 1], b = buf[bi + 2];
         const scale = 1 / 255;
-        data[pi] = Math.min(255, Math.pow(Math.min(1, r * scale), 0.55) * 255) | 0;
-        data[pi + 1] = Math.min(255, Math.pow(Math.min(1, g * scale), 0.55) * 255) | 0;
-        data[pi + 2] = Math.min(255, Math.pow(Math.min(1, b * scale), 0.55) * 255) | 0;
+        data[pi] = Math.min(255, Math.pow(Math.min(1, r * scale), 0.35) * 255) | 0;
+        data[pi + 1] = Math.min(255, Math.pow(Math.min(1, g * scale), 0.35) * 255) | 0;
+        data[pi + 2] = Math.min(255, Math.pow(Math.min(1, b * scale), 0.35) * 255) | 0;
     }
 
     ctx.putImageData(imgData, 0, 0);
