@@ -285,28 +285,13 @@ input[type=range]::-webkit-slider-thumb:hover { background: #5566cc; }
     <div class="tip">Vary initial positions by σ in natural units.<br>Smaller σ = longer until chaos is visible. (Resets Simulation)</div>
   </div>
 
-  <!-- Simulation -->
+  <!-- Speed -->
   <div class="section">
-    <div class="section-title">Simulation</div>
+    <div class="section-title">Speed</div>
     <div class="ctrl-row">
-      <span class="ctrl-label">Speed (steps/frame)</span>
+      <span class="ctrl-label">Steps/frame</span>
       <input type="range" id="sl-speed" min="1" max="40" value="8" step="1">
       <span class="ctrl-value" id="val-speed">8×</span>
-    </div>
-    <div class="ctrl-row">
-      <span class="ctrl-label">Trail fade (trail mode)</span>
-      <input type="range" id="sl-fade" min="0.88" max="0.999" value="0.97" step="0.002">
-      <span class="ctrl-value" id="val-fade">0.970</span>
-    </div>
-    <div class="ctrl-row">
-      <span class="ctrl-label">Sensitivity</span>
-      <input type="range" id="sl-bright" min="1" max="10" value="2" step="0.2">
-      <span class="ctrl-value" id="val-bright">2.0</span>
-    </div>
-    <div class="ctrl-row">
-      <span class="ctrl-label">Softening ε</span>
-      <input type="range" id="sl-soft" min="0.03" max="0.35" value="0.25" step="0.005">
-      <span class="ctrl-value" id="val-soft">0.050</span>
     </div>
   </div>
 
@@ -327,7 +312,12 @@ input[type=range]::-webkit-slider-thumb:hover { background: #5566cc; }
       <input type="checkbox" id="cb-trails">
       <label for="cb-trails">Accumulate trail history</label>
     </div>
-    <div class="tip">Default: snapshot of current positions.<br>Trail mode accumulates history with decay.<br>Drag to pan · Scroll to zoom</div>
+    <div class="ctrl-row" style="margin-top:6px">
+      <span class="ctrl-label">Trail fade</span>
+      <input type="range" id="sl-fade" min="0.88" max="0.999" value="0.97" step="0.002">
+      <span class="ctrl-value" id="val-fade">0.970</span>
+    </div>
+    <div class="tip">Drag to pan · Scroll to zoom</div>
   </div>
 
   <!-- Stats -->
@@ -354,6 +344,22 @@ input[type=range]::-webkit-slider-thumb:hover { background: #5566cc; }
       <span class="stat-value" id="stat-active">0</span>
     </div>
   </div>
+
+  <!-- Advanced -->
+  <div class="section">
+    <div class="section-title">Advanced</div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Sensitivity</span>
+      <input type="range" id="sl-bright" min="1" max="10" value="2" step="0.2">
+      <span class="ctrl-value" id="val-bright">2.0</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Softening ε</span>
+      <input type="range" id="sl-soft" min="0.03" max="0.35" value="0.25" step="0.005">
+      <span class="ctrl-value" id="val-soft">0.050</span>
+    </div>
+  </div>
+
 </div>
 
 <!-- Canvas -->
