@@ -338,18 +338,24 @@ function renderDensity() {
     const buf = densityBuf;
     const len = buf.length;
 
+    // Zoom compensation: a pixel covers (1/viewScale)² world area.
+    // Zooming in spreads particles across more pixels → fewer hits per pixel → dimmer.
+    // Scale perMember by viewScale² so probability density looks the same at any zoom.
+    // Reference scale 290 keeps the default zoom calibrated to sensitivity=1 meaning
+    // "all N particles overlapping = saturated".
+    const zoomComp = (viewScale / 290) ** 2;
+
     let perMember;
     if (showTrails) {
         // Trail/history mode: decay old density and accumulate current frame on top.
-        // Steady-state: fraction f of N at one pixel → brightness = f * sensitivity.
         const fade = fadeFactor;
         for (let i = 0; i < len; i++) buf[i] *= fade;
-        perMember = sensitivity * (1 - fade) * 255 / N;
+        perMember = sensitivity * (1 - fade) * 255 / N * zoomComp;
     } else {
         // Snapshot mode: clear buffer and show only WHERE ensemble members ARE RIGHT NOW.
         // 100% of ensemble at one pixel → brightness saturates at sensitivity = 1.
         buf.fill(0);
-        perMember = sensitivity * 255 / N;
+        perMember = sensitivity * 255 / N * zoomComp;
     }
 
     for (let e = 0; e < N; e++) {
