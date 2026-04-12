@@ -282,7 +282,7 @@ let densityBuf; // Float32Array [W * H * 3], stores RGB floats
 let viewScale = 290;
 let viewCX = 0, viewCY = 0; // world-space center
 let fadeFactor = 0.97;
-let sensitivity = 8.0;
+let sensitivity = 2.0;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
 
