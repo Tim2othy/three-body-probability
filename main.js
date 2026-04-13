@@ -218,7 +218,7 @@ function initSim(presetName) {
     }
 
     masses = [...preset.masses];
-    viewScale = preset.scale;
+    viewScale = preset.scale * 2;
 
     nominal = new Float64Array(preset.state);
     nominalTmp = new Float64Array(STRIDE);
