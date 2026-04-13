@@ -282,7 +282,7 @@ let densityBuf; // Float32Array [W * H * 3], stores RGB floats
 let viewScale = 290;
 let viewCX = 0, viewCY = 0; // world-space center
 let fadeFactor = 0.97;
-let sensitivity = 2.0;
+let sensitivity = 1.0;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
 let showBBox = false;
@@ -314,16 +314,14 @@ function worldToScreen(wx, wy) {
     ];
 }
 
-// 11×11 Gaussian splat kernel (σ=2.5 px) — [dx, dy, weight]
-// Larger kernel means each particle contributes to ~100 pixels instead of 9,
-// making the density visible even when the ensemble is sparse or tightly clustered.
+// Small Gaussian dot kernel (σ=1.5 px, radius 3) — each particle renders as a ~3px soft dot
 const KERNEL = (() => {
     const entries = [];
-    const inv2s2 = 1 / (2 * 2.5 * 2.5); // 1/(2σ²), σ=2.5
-    for (let dy = -5; dy <= 5; dy++) {
-        for (let dx = -5; dx <= 5; dx++) {
+    const inv2s2 = 1 / (2 * 1.5 * 1.5);
+    for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
             const w = Math.exp(-(dx * dx + dy * dy) * inv2s2);
-            if (w > 0.01) entries.push([dx, dy, w]);
+            if (w > 0.05) entries.push([dx, dy, w]);
         }
     }
     return entries;
@@ -531,8 +529,7 @@ function slider(id, valId, onChange, fmt) {
         onChange(v);
     };
     sl.addEventListener('input', update);
-    // Initialize display
-    vl.textContent = fmt ? fmt(parseFloat(sl.value)) : sl.value;
+    update(); // sync display and JS state from HTML default value
 }
 
 function resetSim() {
@@ -594,7 +591,7 @@ function setup() {
     // ── Sensitivity
     slider('sl-bright', 'val-bright', v => {
         sensitivity = v;
-    }, v => v.toFixed(1));
+    }, v => v.toFixed(2));
 
     // ── Softening
     slider('sl-soft', 'val-soft', v => {
