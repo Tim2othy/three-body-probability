@@ -109,6 +109,11 @@
 					<input id="bwScale" type="range" min="0.5" max="2.5" step="0.05" value="1.0" />
 					<span id="bwValue">1.00</span>
 				</label>
+				<label>
+					Complexity penalty
+					<input id="penalty" type="range" min="0" max="2.5" step="0.05" value="0.55" />
+					<span id="penaltyValue">0.55</span>
+				</label>
 			</div>
 			<button id="regen">Regenerate Data</button>
 		</div>
@@ -116,7 +121,8 @@
 		<canvas id="plot" width="1100" height="850"></canvas>
 		<p class="caption">
 			Heatmap: dark blue = low probability density, yellow = high density. White dots are observed samples.
-			The estimate uses Gaussian Kernel Density Estimation (KDE), which does not assume a known true distribution.
+			The estimate uses Gaussian KDE plus a smoothness penalty on the log-density, which biases toward simpler,
+			more continuous surfaces when evidence for extra modes is weak.
 		</p>
 	</div>
 
@@ -126,6 +132,8 @@
 		const statusEl = document.getElementById("status");
 		const bwSlider = document.getElementById("bwScale");
 		const bwValue = document.getElementById("bwValue");
+		const penaltySlider = document.getElementById("penalty");
+		const penaltyValue = document.getElementById("penaltyValue");
 		const regenBtn = document.getElementById("regen");
 
 		const N = 500;
@@ -239,6 +247,75 @@
 			return { xs, ys, dens, dMin, dMax, bandwidth: { hx, hy } };
 		}
 
+		function penalizeComplexity(kde, penaltyStrength) {
+			if (penaltyStrength <= 0) {
+				return kde;
+			}
+
+			const eps = 1e-12;
+			const gh = kde.dens.length;
+			const gw = kde.dens[0].length;
+			const steps = Math.max(1, Math.round(6 + penaltyStrength * 16));
+			const alpha = Math.min(0.22, 0.08 + 0.05 * penaltyStrength);
+
+			let logDens = Array.from({ length: gh }, (_, y) => {
+				const row = new Float64Array(gw);
+				for (let x = 0; x < gw; x++) {
+					row[x] = Math.log(kde.dens[y][x] + eps);
+				}
+				return row;
+			});
+
+			// Laplacian smoothing on log-density approximates a roughness penalty.
+			for (let s = 0; s < steps; s++) {
+				const next = logDens.map(row => new Float64Array(row));
+				for (let y = 1; y < gh - 1; y++) {
+					for (let x = 1; x < gw - 1; x++) {
+						const c = logDens[y][x];
+						const lap =
+							logDens[y - 1][x] +
+							logDens[y + 1][x] +
+							logDens[y][x - 1] +
+							logDens[y][x + 1] -
+							4 * c;
+						next[y][x] = c + alpha * lap;
+					}
+				}
+				logDens = next;
+			}
+
+			const newDens = Array.from({ length: gh }, () => new Float64Array(gw));
+			let total = 0;
+			let dMin = Infinity;
+			let dMax = -Infinity;
+			for (let y = 0; y < gh; y++) {
+				for (let x = 0; x < gw; x++) {
+					const v = Math.exp(logDens[y][x]);
+					newDens[y][x] = v;
+					total += v;
+				}
+			}
+
+			const area = (DOMAIN.xmax - DOMAIN.xmin) * (DOMAIN.ymax - DOMAIN.ymin);
+			const gridCell = area / ((gw - 1) * (gh - 1));
+			const norm = Math.max(total * gridCell, eps);
+			for (let y = 0; y < gh; y++) {
+				for (let x = 0; x < gw; x++) {
+					newDens[y][x] /= norm;
+					if (newDens[y][x] < dMin) dMin = newDens[y][x];
+					if (newDens[y][x] > dMax) dMax = newDens[y][x];
+				}
+			}
+
+			return {
+				...kde,
+				dens: newDens,
+				dMin,
+				dMax,
+				penaltyApplied: penaltyStrength
+			};
+		}
+
 		function lerp(a, b, t) {
 			return a + (b - a) * t;
 		}
@@ -338,18 +415,21 @@
 
 		function render() {
 			bwValue.textContent = Number(bwSlider.value).toFixed(2);
+			penaltyValue.textContent = Number(penaltySlider.value).toFixed(2);
 			statusEl.textContent = "Estimating...";
 
 			requestAnimationFrame(() => {
 				const scale = Number(bwSlider.value);
-				const kde = kde2D(points, GRID, DOMAIN, scale);
+				const penalty = Number(penaltySlider.value);
+				const kdeRaw = kde2D(points, GRID, DOMAIN, scale);
+				const kde = penalizeComplexity(kdeRaw, penalty);
 
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
 				drawHeatmap(kde);
 				drawAxes();
 				drawPoints(points);
 
-				statusEl.textContent = `h=(${kde.bandwidth.hx.toFixed(2)}, ${kde.bandwidth.hy.toFixed(2)})`;
+				statusEl.textContent = `h=(${kde.bandwidth.hx.toFixed(2)}, ${kde.bandwidth.hy.toFixed(2)}), lambda=${penalty.toFixed(2)}`;
 			});
 		}
 
@@ -359,6 +439,7 @@
 		}
 
 		bwSlider.addEventListener("input", render);
+		penaltySlider.addEventListener("input", render);
 		regenBtn.addEventListener("click", regenerate);
 
 		regenerate();
