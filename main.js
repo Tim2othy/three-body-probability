@@ -342,6 +342,36 @@ function splat(px, py, cr, cg, cb, amount) {
 }
 
 function renderDensity() {
+    if (!showTrails) {
+        // Snapshot mode: draw each ensemble particle as a 2px circle directly on canvas.
+        // alpha chosen so N fully-overlapping dots stack to nearly opaque.
+        // sensitivity > 1 makes individual dots more visible; < 1 requires more overlap.
+        ctx.fillStyle = '#080810';
+        ctx.fillRect(0, 0, W, H);
+
+        // sensitivity is directly the per-dot alpha: 1 = solid, 0 = invisible
+        const alpha = sensitivity;
+        const r = 2;
+        const TAU = Math.PI * 2;
+
+        for (let b = 0; b < 3; b++) {
+            const [cr, cg, cv] = BODY_RGB[b];
+            ctx.fillStyle = `rgba(${(cr * 255) | 0},${(cg * 255) | 0},${(cv * 255) | 0},${alpha.toFixed(4)})`;
+            for (let e = 0; e < N; e++) {
+                const wx = ensemble[e * STRIDE + b * 2];
+                const wy = ensemble[e * STRIDE + b * 2 + 1];
+                const sx = (wx - viewCX) * viewScale + W * 0.5;
+                const sy = -(wy - viewCY) * viewScale + H * 0.5;
+                if (sx < -r || sx >= W + r || sy < -r || sy >= H + r) continue;
+                ctx.beginPath();
+                ctx.arc(sx, sy, r, 0, TAU);
+                ctx.fill();
+            }
+        }
+        return;
+    }
+
+    // Trail mode: density buffer with exponential decay.
     const buf = densityBuf;
     const len = buf.length;
 
@@ -370,7 +400,7 @@ function renderDensity() {
             const wx = ensemble[base + b * 2];
             const wy = ensemble[base + b * 2 + 1];
             const [sx, sy] = worldToScreen(wx, wy);
-            if (sx < -6 || sx >= W + 6 || sy < -6 || sy >= H + 6) continue;
+            if (sx < -4 || sx >= W + 4 || sy < -4 || sy >= H + 4) continue;
             const col = BODY_RGB[b];
             splat(sx, sy, col[0], col[1], col[2], perMember);
         }
