@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>2D Probability Density Estimate</title>
+	<style>
+		:root {
+			--bg: #0b1020;
+			--panel: #111933;
+			--text: #e8eefc;
+			--muted: #9fb0d6;
+			--accent: #ffd84d;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			background:
+				radial-gradient(1200px 800px at 10% -10%, #1f2a52 0%, transparent 60%),
+				radial-gradient(900px 600px at 100% 110%, #0f5a6f 0%, transparent 50%),
+				var(--bg);
+			color: var(--text);
+			font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+			display: grid;
+			place-items: center;
+			padding: 20px;
+		}
+
+		.wrap {
+			width: min(1100px, 98vw);
+			display: grid;
+			gap: 14px;
+		}
+
+		.controls {
+			background: color-mix(in srgb, var(--panel) 90%, white 10%);
+			border: 1px solid #2a3663;
+			border-radius: 14px;
+			padding: 12px;
+			display: grid;
+			grid-template-columns: 1fr auto;
+			gap: 10px;
+			align-items: center;
+		}
+
+		.control-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 14px;
+			align-items: center;
+			color: var(--muted);
+			font-size: 14px;
+		}
+
+		button {
+			border: 0;
+			border-radius: 10px;
+			padding: 10px 14px;
+			font-weight: 600;
+			background: linear-gradient(120deg, #ffe58a, var(--accent));
+			color: #17203f;
+			cursor: pointer;
+		}
+
+		button:hover {
+			filter: brightness(1.05);
+		}
+
+		label {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		input[type="range"] {
+			accent-color: var(--accent);
+		}
+
+		#plot {
+			width: 100%;
+			aspect-ratio: 1.2;
+			border-radius: 16px;
+			border: 1px solid #2a3663;
+			background: #070b18;
+			box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+		}
+
+		.caption {
+			color: var(--muted);
+			font-size: 13px;
+			line-height: 1.45;
+			margin: 0;
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<div class="controls">
+			<div class="control-row">
+				<strong style="color: var(--text)">Nonparametric 2D KDE from 500 Points</strong>
+				<span id="status">Estimating...</span>
+				<label>
+					Bandwidth scale
+					<input id="bwScale" type="range" min="0.5" max="2.5" step="0.05" value="1.0" />
+					<span id="bwValue">1.00</span>
+				</label>
+			</div>
+			<button id="regen">Regenerate Data</button>
+		</div>
+
+		<canvas id="plot" width="1100" height="850"></canvas>
+		<p class="caption">
+			Heatmap: dark blue = low probability density, yellow = high density. White dots are observed samples.
+			The estimate uses Gaussian Kernel Density Estimation (KDE), which does not assume a known true distribution.
+		</p>
+	</div>
+
+	<script>
+		const canvas = document.getElementById("plot");
+		const ctx = canvas.getContext("2d");
+		const statusEl = document.getElementById("status");
+		const bwSlider = document.getElementById("bwScale");
+		const bwValue = document.getElementById("bwValue");
+		const regenBtn = document.getElementById("regen");
+
+		const N = 500;
+		const GRID = 130;
+		const DOMAIN = { xmin: -10, xmax: 10, ymin: -10, ymax: 10 };
+
+		let points = [];
+
+		function randn() {
+			const u1 = Math.max(Math.random(), 1e-12);
+			const u2 = Math.random();
+			return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+		}
+
+		function sampleGaussian(muX, muY, sigmaX, sigmaY) {
+			return {
+				x: muX + sigmaX * randn(),
+				y: muY + sigmaY * randn()
+			};
+		}
+
+		function generateMixtureData(n) {
+			const components = [
+				{ w: 0.22, mx: -5.5, my: -2.8, sx: 1.2, sy: 0.8 },
+				{ w: 0.16, mx: -1.2, my: 4.6, sx: 0.9, sy: 1.6 },
+				{ w: 0.26, mx: 2.6, my: 1.1, sx: 1.5, sy: 1.0 },
+				{ w: 0.20, mx: 5.1, my: -4.0, sx: 1.0, sy: 1.4 },
+				{ w: 0.16, mx: 0.2, my: -5.9, sx: 0.8, sy: 0.7 }
+			];
+
+			const cdf = [];
+			let sum = 0;
+			for (const c of components) {
+				sum += c.w;
+				cdf.push(sum);
+			}
+
+			const data = [];
+			for (let i = 0; i < n; i++) {
+				const r = Math.random();
+				let k = 0;
+				while (k < cdf.length - 1 && r > cdf[k]) {
+					k++;
+				}
+				const c = components[k];
+				data.push(sampleGaussian(c.mx, c.my, c.sx, c.sy));
+			}
+			return data;
+		}
+
+		function mean(arr) {
+			return arr.reduce((a, b) => a + b, 0) / arr.length;
+		}
+
+		function stdev(arr) {
+			const m = mean(arr);
+			const v = arr.reduce((acc, x) => acc + (x - m) ** 2, 0) / Math.max(arr.length - 1, 1);
+			return Math.sqrt(v);
+		}
+
+		function silvermanBandwidth2D(data) {
+			const xs = data.map(p => p.x);
+			const ys = data.map(p => p.y);
+			const sx = Math.max(stdev(xs), 1e-6);
+			const sy = Math.max(stdev(ys), 1e-6);
+			const n = data.length;
+			const d = 2;
+			const scale = n ** (-1 / (d + 4));
+			return { hx: 1.06 * sx * scale, hy: 1.06 * sy * scale };
+		}
+
+		function kde2D(data, gridSize, domain, bandwidthScale = 1.0) {
+			const n = data.length;
+			const { hx: hx0, hy: hy0 } = silvermanBandwidth2D(data);
+			const hx = hx0 * bandwidthScale;
+			const hy = hy0 * bandwidthScale;
+			const invNorm = 1 / (n * hx * hy * 2 * Math.PI);
+
+			const xs = new Array(gridSize);
+			const ys = new Array(gridSize);
+			const dens = Array.from({ length: gridSize }, () => new Float64Array(gridSize));
+
+			const dx = (domain.xmax - domain.xmin) / (gridSize - 1);
+			const dy = (domain.ymax - domain.ymin) / (gridSize - 1);
+
+			for (let i = 0; i < gridSize; i++) {
+				xs[i] = domain.xmin + i * dx;
+				ys[i] = domain.ymin + i * dy;
+			}
+
+			let dMin = Infinity;
+			let dMax = -Infinity;
+
+			for (let gy = 0; gy < gridSize; gy++) {
+				const y = ys[gy];
+				for (let gx = 0; gx < gridSize; gx++) {
+					const x = xs[gx];
+					let sum = 0;
+					for (let i = 0; i < n; i++) {
+						const zx = (x - data[i].x) / hx;
+						const zy = (y - data[i].y) / hy;
+						sum += Math.exp(-0.5 * (zx * zx + zy * zy));
+					}
+					const val = invNorm * sum;
+					dens[gy][gx] = val;
+					if (val < dMin) dMin = val;
+					if (val > dMax) dMax = val;
+				}
+			}
+
+			return { xs, ys, dens, dMin, dMax, bandwidth: { hx, hy } };
+		}
+
+		function lerp(a, b, t) {
+			return a + (b - a) * t;
+		}
+
+		function colorScaleBlueToYellow(t) {
+			const stops = [
+				{ t: 0.00, c: [8, 20, 78] },
+				{ t: 0.35, c: [32, 113, 186] },
+				{ t: 0.62, c: [69, 186, 173] },
+				{ t: 0.82, c: [177, 222, 123] },
+				{ t: 1.00, c: [255, 230, 84] }
+			];
+
+			t = Math.min(1, Math.max(0, t));
+			let a = stops[0];
+			let b = stops[stops.length - 1];
+			for (let i = 0; i < stops.length - 1; i++) {
+				if (t >= stops[i].t && t <= stops[i + 1].t) {
+					a = stops[i];
+					b = stops[i + 1];
+					break;
+				}
+			}
+
+			const u = (t - a.t) / (b.t - a.t || 1);
+			const r = Math.round(lerp(a.c[0], b.c[0], u));
+			const g = Math.round(lerp(a.c[1], b.c[1], u));
+			const bl = Math.round(lerp(a.c[2], b.c[2], u));
+			return `rgb(${r}, ${g}, ${bl})`;
+		}
+
+		function toCanvasX(x) {
+			return ((x - DOMAIN.xmin) / (DOMAIN.xmax - DOMAIN.xmin)) * canvas.width;
+		}
+
+		function toCanvasY(y) {
+			return canvas.height - ((y - DOMAIN.ymin) / (DOMAIN.ymax - DOMAIN.ymin)) * canvas.height;
+		}
+
+		function drawHeatmap(kde) {
+			const { xs, ys, dens, dMin, dMax } = kde;
+			const gw = xs.length;
+			const gh = ys.length;
+			const cw = canvas.width / (gw - 1);
+			const ch = canvas.height / (gh - 1);
+
+			// Log scaling improves contrast between low/high probability mass.
+			const logMin = Math.log(dMin + 1e-12);
+			const logMax = Math.log(dMax + 1e-12);
+
+			for (let gy = 0; gy < gh - 1; gy++) {
+				for (let gx = 0; gx < gw - 1; gx++) {
+					const v = dens[gy][gx];
+					const t = (Math.log(v + 1e-12) - logMin) / Math.max(logMax - logMin, 1e-12);
+					ctx.fillStyle = colorScaleBlueToYellow(t);
+					ctx.fillRect(gx * cw, canvas.height - (gy + 1) * ch, cw + 1, ch + 1);
+				}
+			}
+		}
+
+		function drawPoints(data) {
+			ctx.save();
+			ctx.globalAlpha = 0.9;
+			for (const p of data) {
+				const x = toCanvasX(p.x);
+				const y = toCanvasY(p.y);
+				ctx.beginPath();
+				ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+				ctx.fillStyle = "rgba(255,255,255,0.95)";
+				ctx.fill();
+			}
+			ctx.restore();
+		}
+
+		function drawAxes() {
+			ctx.save();
+			ctx.strokeStyle = "rgba(255,255,255,0.25)";
+			ctx.lineWidth = 1;
+
+			const x0 = toCanvasX(0);
+			const y0 = toCanvasY(0);
+
+			ctx.beginPath();
+			ctx.moveTo(0, y0);
+			ctx.lineTo(canvas.width, y0);
+			ctx.moveTo(x0, 0);
+			ctx.lineTo(x0, canvas.height);
+			ctx.stroke();
+
+			ctx.fillStyle = "rgba(255,255,255,0.85)";
+			ctx.font = "13px Segoe UI";
+			ctx.fillText("x", canvas.width - 16, y0 - 6);
+			ctx.fillText("y", x0 + 8, 16);
+
+			ctx.restore();
+		}
+
+		function render() {
+			bwValue.textContent = Number(bwSlider.value).toFixed(2);
+			statusEl.textContent = "Estimating...";
+
+			requestAnimationFrame(() => {
+				const scale = Number(bwSlider.value);
+				const kde = kde2D(points, GRID, DOMAIN, scale);
+
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				drawHeatmap(kde);
+				drawAxes();
+				drawPoints(points);
+
+				statusEl.textContent = `h=(${kde.bandwidth.hx.toFixed(2)}, ${kde.bandwidth.hy.toFixed(2)})`;
+			});
+		}
+
+		function regenerate() {
+			points = generateMixtureData(N);
+			render();
+		}
+
+		bwSlider.addEventListener("input", render);
+		regenBtn.addEventListener("click", regenerate);
+
+		regenerate();
+	</script>
+</body>
+</html>
