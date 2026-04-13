@@ -202,6 +202,19 @@ let softeningEps;
 let currentPreset = 'random';
 const PRESETS = makePresets();
 
+function centerView() {
+    // Center on the nominal centre of mass (better than origin for asymmetric configs)
+    let cx = 0, cy = 0, totalM = 0;
+    for (let b = 0; b < 3; b++) {
+        cx += masses[b] * nominal[b * 2];
+        cy += masses[b] * nominal[b * 2 + 1];
+        totalM += masses[b];
+    }
+    viewCX = cx / totalM;
+    viewCY = cy / totalM;
+    clearDensity();
+}
+
 function gaussianRand() {
     // Box-Muller transform
     const u1 = Math.random() + 1e-15;
@@ -233,6 +246,8 @@ function initSim(presetName) {
             ensemble[base + j] = nominal[j] + noise;
         }
     }
+
+    centerView();
 
     simTime = 0;
     spreadHistory = [];
@@ -642,7 +657,7 @@ function setup() {
         viewScale /= 1.4; clearDensity();
     });
     document.getElementById('btn-center').addEventListener('click', () => {
-        viewCX = 0; viewCY = 0; clearDensity();
+        centerView();
     });
 
     // ── Checkboxes
