@@ -541,18 +541,19 @@ let stepsPerFrame;
 let frameCount = 0;
 
 function frame() {
-    if (running && ensemble) {
-        for (let i = 0; i < stepsPerFrame; i++) {
-            stepAll(DT);
-            simTime += DT;
+    if (ensemble) {
+        if (running) {
+            for (let i = 0; i < stepsPerFrame; i++) {
+                stepAll(DT);
+                simTime += DT;
+            }
+            frameCount++;
+            if (frameCount % 12 === 0) computeStats();
         }
 
-        renderDensity(); // always render current probability mass (snapshot or trail mode)
+        renderDensity();
         if (showBBox) renderBBoxes();
         if (showNominal) renderNominal();
-
-        frameCount++;
-        if (frameCount % 12 === 0) computeStats();
     }
 
     requestAnimationFrame(frame);
