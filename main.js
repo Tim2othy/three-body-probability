@@ -185,15 +185,15 @@ function rk4Step(s_in, s_out, m, dt, eps) {
 // SIMULATION STATE
 // ════════════════════════════════════════════════════════════════
 
-let N = 500;
+let N;
 let masses = [1, 1, 1];
 let ensemble;    // Float64Array [N * STRIDE]
 let ensembleTmp; // Float64Array [N * STRIDE] — swap buffer
 let nominal;     // Float64Array [STRIDE]
 let nominalTmp;  // Float64Array [STRIDE]
 let simTime = 0;
-let perturbScale = 1e-4;
-let softeningEps = 0.35;
+let perturbScale;
+let softeningEps;
 
 // ════════════════════════════════════════════════════════════════
 // INITIALIZATION
@@ -224,9 +224,6 @@ function initSim(presetName) {
     nominalTmp = new Float64Array(STRIDE);
     ensemble = new Float64Array(N * STRIDE);
     ensembleTmp = new Float64Array(N * STRIDE);
-
-    const s_in = Array.from(nominal);
-    const s_out = new Array(STRIDE);
 
     for (let e = 0; e < N; e++) {
         const base = e * STRIDE;
@@ -281,8 +278,8 @@ let densityBuf; // Float32Array [W * H * 3], stores RGB floats
 
 let viewScale = 290;
 let viewCX = 0, viewCY = 0; // world-space center
-let fadeFactor = 0.97;
-let sensitivity = 1.0;
+let fadeFactor;
+let sensitivity;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
 let showBBox = false;
@@ -525,7 +522,7 @@ function computeStats() {
 // ════════════════════════════════════════════════════════════════
 
 let running = true;
-let stepsPerFrame = 8;
+let stepsPerFrame;
 let frameCount = 0;
 
 function frame() {
@@ -571,6 +568,15 @@ function resetSim() {
 function setup() {
     resize();
     window.addEventListener('resize', () => { resize(); clearDensity(); });
+
+    // Read all slider defaults from HTML — single source of truth for initial values
+    const _r = id => parseFloat(document.getElementById(id).value);
+    N = Math.round(_r('sl-n'));
+    perturbScale = Math.pow(10, _r('sl-perturb'));
+    stepsPerFrame = _r('sl-speed');
+    fadeFactor = _r('sl-fade');
+    sensitivity = _r('sl-bright');
+    softeningEps = _r('sl-soft');
 
     initSim(currentPreset);
 
