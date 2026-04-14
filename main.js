@@ -649,12 +649,6 @@ function setup() {
     }, v => v.toFixed(3));
 
     // ── Zoom
-    document.getElementById('btn-zoom-in').addEventListener('click', () => {
-        viewScale *= 1.4; clearDensity();
-    });
-    document.getElementById('btn-zoom-out').addEventListener('click', () => {
-        viewScale /= 1.4; clearDensity();
-    });
     document.getElementById('btn-center').addEventListener('click', () => {
         centerView();
     });
