@@ -497,6 +497,7 @@ const _kdeYs = new Float64Array(KDE_MAX_N);
 const _kdeDens = new Float64Array(KDE_G * KDE_G);
 const _kdePL = new Float64Array(KDE_G * KDE_G); // log-density working buffer
 const _kdePN = new Float64Array(KDE_G * KDE_G); // next-step working buffer
+const _kdeRGB = new Float64Array(KDE_G * KDE_G * 3); // accumulated RGB output
 
 let _kdeSmall, _kdeSmallCtx, _kdeSmallImg;
 
@@ -520,8 +521,11 @@ function _kdeStdev(arr, n) {
 
 // Fills _kdeDens with unnormalized Gaussian KDE; returns peak value
 function _kdeCompute(n, wxMin, wyMin, wDx, wDy) {
-    const sx = Math.max(_kdeStdev(_kdeXs, n), 1e-6);
-    const sy = Math.max(_kdeStdev(_kdeYs, n), 1e-6);
+    // Minimum bandwidth = 1.5 grid cells in world units — prevents sub-pixel spikes
+    // when all particles are clumped at t=0 or the ensemble hasn't spread yet
+    const minBW = Math.max(wDx, wDy) * 1.5;
+    const sx = Math.max(_kdeStdev(_kdeXs, n), minBW);
+    const sy = Math.max(_kdeStdev(_kdeYs, n), minBW);
     const bw = Math.pow(n, -1 / 6); // Silverman: n^{-1/(d+4)}, d=2
     const hx = 1.06 * sx * bw * kdeBandwidthScale;
     const hy = 1.06 * sy * bw * kdeBandwidthScale;
@@ -580,7 +584,7 @@ function renderKDEOverlay() {
 
     const PENALTY = 0.55; // same default as testing_nicer_dist.html
     const GG = KDE_G * KDE_G;
-    const rgbAccum = new Float64Array(GG * 3);
+    _kdeRGB.fill(0);
 
     for (let b = 0; b < 3; b++) {
         // Uniform subsample
@@ -609,9 +613,9 @@ function renderKDEOverlay() {
         const [cr, cg, cb] = BODY_RGB[b];
         for (let i = 0; i < GG; i++) {
             const t = Math.max(0, (Math.log(_kdeDens[i] + 1e-12) - logMin) / logRange);
-            rgbAccum[i * 3] += cr * t;
-            rgbAccum[i * 3 + 1] += cg * t;
-            rgbAccum[i * 3 + 2] += cb * t;
+            _kdeRGB[i * 3] += cr * t;
+            _kdeRGB[i * 3 + 1] += cg * t;
+            _kdeRGB[i * 3 + 2] += cb * t;
         }
     }
 
@@ -622,9 +626,9 @@ function renderKDEOverlay() {
         for (let gx = 0; gx < KDE_G; gx++) {
             const i = gy * KDE_G + gx;
             const pi = (py * KDE_G + gx) * 4;
-            imgD[pi] = Math.min(255, rgbAccum[i * 3] * 255 + 0.5) | 0;
-            imgD[pi + 1] = Math.min(255, rgbAccum[i * 3 + 1] * 255 + 0.5) | 0;
-            imgD[pi + 2] = Math.min(255, rgbAccum[i * 3 + 2] * 255 + 0.5) | 0;
+            imgD[pi] = Math.min(255, _kdeRGB[i * 3] * 255 + 0.5) | 0;
+            imgD[pi + 1] = Math.min(255, _kdeRGB[i * 3 + 1] * 255 + 0.5) | 0;
+            imgD[pi + 2] = Math.min(255, _kdeRGB[i * 3 + 2] * 255 + 0.5) | 0;
         }
     }
 
