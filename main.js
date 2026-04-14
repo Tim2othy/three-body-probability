@@ -790,8 +790,8 @@ function setup() {
 
     // ── Speed
     slider('sl-speed', 'val-speed', v => {
-        stepsPerFrame = Math.round(v);
-    }, v => Math.round(v) + '×');
+        stepsPerFrame = v | 0;
+    }, v => (v | 0) + '×');
 
     // ── Fade
     slider('sl-fade', 'val-fade', v => {
