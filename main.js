@@ -648,10 +648,7 @@ function setup() {
         softeningEps = v;
     }, v => v.toFixed(3));
 
-    // ── Zoom
-    document.getElementById('btn-center').addEventListener('click', () => {
-        centerView();
-    });
+
 
     // ── Checkboxes
     document.getElementById('cb-bbox').addEventListener('change', function () {
