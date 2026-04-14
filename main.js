@@ -295,6 +295,7 @@ let viewScale = 290;
 let viewCX = 0, viewCY = 0; // world-space center
 let fadeFactor;
 let sensitivity;
+let kdeBandwidthScale = 1.0;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
 let showBBox = false;
@@ -360,6 +361,7 @@ function renderDensity() {
         // sensitivity > 1 makes individual dots more visible; < 1 requires more overlap.
         ctx.fillStyle = '#080810';
         ctx.fillRect(0, 0, W, H);
+        renderKDEOverlay();
 
         // sensitivity is directly the per-dot alpha: 1 = solid, 0 = invisible
         const alpha = sensitivity;
@@ -483,6 +485,158 @@ function clearCanvas() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// KDE OVERLAY  (algorithm ported from testing_nicer_dist.html)
+// ════════════════════════════════════════════════════════════════
+
+const KDE_G = 50;      // small grid; upscaled to full canvas via drawImage
+const KDE_MAX_N = 300; // subsample to ≤ this many particles per body
+
+// Pre-allocated to avoid per-frame GC pressure
+const _kdeXs = new Float64Array(KDE_MAX_N);
+const _kdeYs = new Float64Array(KDE_MAX_N);
+const _kdeDens = new Float64Array(KDE_G * KDE_G);
+const _kdePL = new Float64Array(KDE_G * KDE_G); // log-density working buffer
+const _kdePN = new Float64Array(KDE_G * KDE_G); // next-step working buffer
+
+let _kdeSmall, _kdeSmallCtx, _kdeSmallImg;
+
+function _kdeSetup() {
+    _kdeSmall = document.createElement('canvas');
+    _kdeSmall.width = KDE_G;
+    _kdeSmall.height = KDE_G;
+    _kdeSmallCtx = _kdeSmall.getContext('2d');
+    _kdeSmallImg = _kdeSmallCtx.createImageData(KDE_G, KDE_G);
+    for (let i = 3; i < _kdeSmallImg.data.length; i += 4) _kdeSmallImg.data[i] = 255;
+}
+
+function _kdeStdev(arr, n) {
+    let s = 0;
+    for (let i = 0; i < n; i++) s += arr[i];
+    const m = s / n;
+    let v = 0;
+    for (let i = 0; i < n; i++) { const d = arr[i] - m; v += d * d; }
+    return Math.sqrt(v / Math.max(n - 1, 1));
+}
+
+// Fills _kdeDens with unnormalized Gaussian KDE; returns peak value
+function _kdeCompute(n, wxMin, wyMin, wDx, wDy) {
+    const sx = Math.max(_kdeStdev(_kdeXs, n), 1e-6);
+    const sy = Math.max(_kdeStdev(_kdeYs, n), 1e-6);
+    const bw = Math.pow(n, -1 / 6); // Silverman: n^{-1/(d+4)}, d=2
+    const hx = 1.06 * sx * bw * kdeBandwidthScale;
+    const hy = 1.06 * sy * bw * kdeBandwidthScale;
+    let dMax = 0;
+    for (let gy = 0; gy < KDE_G; gy++) {
+        const wy = wyMin + gy * wDy;
+        for (let gx = 0; gx < KDE_G; gx++) {
+            const wx = wxMin + gx * wDx;
+            let sum = 0;
+            for (let i = 0; i < n; i++) {
+                const zx = (wx - _kdeXs[i]) / hx;
+                const zy = (wy - _kdeYs[i]) / hy;
+                sum += Math.exp(-0.5 * (zx * zx + zy * zy));
+            }
+            _kdeDens[gy * KDE_G + gx] = sum;
+            if (sum > dMax) dMax = sum;
+        }
+    }
+    return dMax;
+}
+
+// Laplacian smoothing on log-density (complexity penalty) — mutates _kdeDens
+function _kdePenalize(penaltyStrength) {
+    if (penaltyStrength <= 0) return;
+    const eps = 1e-12;
+    const G = KDE_G;
+    const GG = G * G;
+    const steps = Math.max(1, Math.round(6 + penaltyStrength * 16));
+    const alpha = Math.min(0.22, 0.08 + 0.05 * penaltyStrength);
+    for (let i = 0; i < GG; i++) _kdePL[i] = Math.log(_kdeDens[i] + eps);
+    for (let s = 0; s < steps; s++) {
+        for (let y = 1; y < G - 1; y++) {
+            for (let x = 1; x < G - 1; x++) {
+                const i = y * G + x;
+                const lap = _kdePL[i - G] + _kdePL[i + G] + _kdePL[i - 1] + _kdePL[i + 1] - 4 * _kdePL[i];
+                _kdePN[i] = _kdePL[i] + alpha * lap;
+            }
+        }
+        for (let y = 1; y < G - 1; y++) {
+            for (let x = 1; x < G - 1; x++) _kdePL[y * G + x] = _kdePN[y * G + x];
+        }
+    }
+    for (let i = 0; i < GG; i++) _kdeDens[i] = Math.exp(_kdePL[i]);
+}
+
+function renderKDEOverlay() {
+    if (!_kdeSmall) _kdeSetup();
+
+    // Viewport → world bounds
+    const halfW = (W * 0.5) / viewScale;
+    const halfH = (H * 0.5) / viewScale;
+    const wxMin = viewCX - halfW, wxMax = viewCX + halfW;
+    const wyMin = viewCY - halfH, wyMax = viewCY + halfH;
+    const wDx = (wxMax - wxMin) / (KDE_G - 1);
+    const wDy = (wyMax - wyMin) / (KDE_G - 1);
+
+    const PENALTY = 0.55; // same default as testing_nicer_dist.html
+    const GG = KDE_G * KDE_G;
+    const rgbAccum = new Float64Array(GG * 3);
+
+    for (let b = 0; b < 3; b++) {
+        // Uniform subsample
+        const sN = Math.min(N, KDE_MAX_N);
+        const step = N / sN;
+        for (let i = 0; i < sN; i++) {
+            const e = Math.min(N - 1, (i * step) | 0);
+            _kdeXs[i] = ensemble[e * STRIDE + b * 2];
+            _kdeYs[i] = ensemble[e * STRIDE + b * 2 + 1];
+        }
+
+        const dMax = _kdeCompute(sN, wxMin, wyMin, wDx, wDy);
+        if (dMax <= 0) continue;
+        _kdePenalize(PENALTY);
+
+        // Re-find peak after penalty
+        let peak = 0;
+        for (let i = 0; i < GG; i++) if (_kdeDens[i] > peak) peak = _kdeDens[i];
+        if (peak <= 0) continue;
+
+        // Log-normalize; floor at 1e-4 of peak so background maps to 0
+        const logMin = Math.log(peak * 1e-4 + 1e-12);
+        const logMax = Math.log(peak + 1e-12);
+        const logRange = logMax - logMin || 1;
+
+        const [cr, cg, cb] = BODY_RGB[b];
+        for (let i = 0; i < GG; i++) {
+            const t = Math.max(0, (Math.log(_kdeDens[i] + 1e-12) - logMin) / logRange);
+            rgbAccum[i * 3] += cr * t;
+            rgbAccum[i * 3 + 1] += cg * t;
+            rgbAccum[i * 3 + 2] += cb * t;
+        }
+    }
+
+    // Write to small canvas (flip Y: gy=0 = world-bottom = screen-bottom)
+    const imgD = _kdeSmallImg.data;
+    for (let gy = 0; gy < KDE_G; gy++) {
+        const py = KDE_G - 1 - gy;
+        for (let gx = 0; gx < KDE_G; gx++) {
+            const i = gy * KDE_G + gx;
+            const pi = (py * KDE_G + gx) * 4;
+            imgD[pi] = Math.min(255, rgbAccum[i * 3] * 255 + 0.5) | 0;
+            imgD[pi + 1] = Math.min(255, rgbAccum[i * 3 + 1] * 255 + 0.5) | 0;
+            imgD[pi + 2] = Math.min(255, rgbAccum[i * 3 + 2] * 255 + 0.5) | 0;
+        }
+    }
+
+    _kdeSmallCtx.putImageData(_kdeSmallImg, 0, 0);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(_kdeSmall, 0, 0, W, H);
+    ctx.restore();
+}
+
+// ════════════════════════════════════════════════════════════════
 // STATISTICS
 // ════════════════════════════════════════════════════════════════
 
@@ -591,6 +745,7 @@ function setup() {
     fadeFactor = _r('sl-fade');
     sensitivity = _r('sl-bright');
     softeningEps = _r('sl-soft');
+    kdeBandwidthScale = _r('sl-kde-bw');
 
     initSim(currentPreset);
 
@@ -647,6 +802,11 @@ function setup() {
     slider('sl-soft', 'val-soft', v => {
         softeningEps = v;
     }, v => v.toFixed(3));
+
+    // ── KDE Bandwidth
+    slider('sl-kde-bw', 'val-kde-bw', v => {
+        kdeBandwidthScale = v;
+    }, v => v.toFixed(2));
 
 
 
