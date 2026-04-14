@@ -296,6 +296,7 @@ let viewCX = 0, viewCY = 0; // world-space center
 let fadeFactor;
 let sensitivity;
 let kdeBandwidthScale = 1.0;
+let kdeEnabled = false;
 let showNominal = false;
 let showTrails = false; // false = snapshot of current positions; true = accumulate history
 let showBBox = false;
@@ -361,7 +362,7 @@ function renderDensity() {
         // sensitivity > 1 makes individual dots more visible; < 1 requires more overlap.
         ctx.fillStyle = '#080810';
         ctx.fillRect(0, 0, W, H);
-        renderKDEOverlay();
+        if (kdeEnabled) renderKDEOverlay();
 
         // sensitivity is directly the per-dot alpha: 1 = solid, 0 = invisible
         const alpha = sensitivity;
@@ -813,6 +814,13 @@ function setup() {
     }, v => v.toFixed(2));
 
 
+
+    // ── KDE toggle
+    document.getElementById('btn-kde').addEventListener('click', function () {
+        kdeEnabled = !kdeEnabled;
+        this.textContent = kdeEnabled ? 'KDE on' : 'KDE off';
+        this.classList.toggle('active', kdeEnabled);
+    });
 
     // ── Checkboxes
     document.getElementById('cb-bbox').addEventListener('change', function () {
