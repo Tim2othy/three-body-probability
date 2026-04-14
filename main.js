@@ -526,8 +526,6 @@ function computeStats() {
     document.getElementById('stat-spread').textContent = maxSpread.toFixed(4);
     document.getElementById('stat-lyap').textContent =
         (lyapunovEst !== null) ? lyapunovEst.toFixed(3) : '—';
-    document.getElementById('stat-active').textContent = N;
-
     const chaosNorm = Math.min(1, maxSpread / 4);
     document.getElementById('chaos-fill').style.width = (chaosNorm * 100).toFixed(1) + '%';
 }
