@@ -267,46 +267,35 @@ details.section[open] > summary { margin-bottom: 10px; }
       <option value="butterfly">Butterfly Orbit</option>
     </select>
 
-    <div class="section-title">Ensemble</div>
+    <div class="section-title">Initialization</div>
     <div class="ctrl-row">
       <span class="ctrl-label">Number of Simulations to Run N</span>
       <input type="range" id="sl-n" min="200" max="10000" value="2000" step="100">
       <span class="ctrl-value" id="val-n">2000</span>
     </div>
     <div class="ctrl-row">
-      <span class="ctrl-label">Starting Perturbation σ</span>
+      <span class="ctrl-label">Starting Perturbation</span>
       <input type="range" id="sl-perturb" min="-7" max="-2" value="-4" step="0.25">
       <span class="ctrl-value" id="val-perturb">1e-4</span>
     </div>
-    <div class="tip">Vary initial positions by σ in natural units.<br>Smaller σ = longer until chaos is visible. (Resets Simulation)</div>
   </div>
 
-  <!-- Speed -->
+  <!-- Simulation -->
   <div class="section">
-    <div class="section-title">Speed</div>
+    <div class="section-title">Simulation</div>
     <div class="ctrl-row">
       <span class="ctrl-label">Speed</span>
       <input type="range" id="sl-speed" min="1" max="4" value="1" step="1">
       <span class="ctrl-value" id="val-speed">2×</span>
     </div>
-  </div>
-
-
-  <!-- View -->
-  <div class="section">
-    <div class="section-title">View</div>
-    <div class="check-row">
-      <input type="checkbox" id="cb-bbox">
-      <label for="cb-bbox">Show 90% bounding boxes</label>
-    </div>
-  </div>
-
-  <!-- Softening -->
-  <div class="section">
     <div class="ctrl-row" style="margin-bottom:0">
       <span class="ctrl-label">Gravity Softening ε</span>
       <input type="range" id="sl-soft" min="0.03" max="0.3" value="0.25" step="0.01">
       <span class="ctrl-value" id="val-soft">0.250</span>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="cb-bbox">
+      <label for="cb-bbox">Show 90% bounding boxes</label>
     </div>
   </div>
 
