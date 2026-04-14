@@ -194,6 +194,7 @@ let nominalTmp;  // Float64Array [STRIDE]
 let simTime = 0;
 let perturbScale;
 let softeningEps;
+let lastRandomPreset = null;
 
 // ════════════════════════════════════════════════════════════════
 // INITIALIZATION
@@ -222,14 +223,15 @@ function gaussianRand() {
     return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
-function initSim(presetName) {
-    let preset;
-    if (presetName === 'random') {
-        preset = generateRandom();
-    } else {
-        preset = PRESETS[presetName];
-    }
+function clonePreset(preset) {
+    return {
+        masses: [...preset.masses],
+        state: [...preset.state],
+        scale: preset.scale,
+    };
+}
 
+function applyPreset(preset) {
     masses = [...preset.masses];
     viewScale = preset.scale * 2;
 
@@ -253,6 +255,27 @@ function initSim(presetName) {
     spreadHistory = [];
     lyapunovEst = null;
     clearDensity();
+}
+
+function initSim(presetName) {
+    let preset;
+    if (presetName === 'random') {
+        preset = generateRandom();
+        lastRandomPreset = clonePreset(preset);
+    } else {
+        preset = PRESETS[presetName];
+    }
+
+    applyPreset(preset);
+}
+
+function replaySim() {
+    if (!lastRandomPreset) {
+        resetSim();
+        return;
+    }
+
+    applyPreset(lastRandomPreset);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -764,6 +787,9 @@ function setup() {
 
     // ── Reset
     document.getElementById('btn-reset').addEventListener('click', resetSim);
+
+    // ── Replay last random preset
+    document.getElementById('btn-replay').addEventListener('click', replaySim);
 
     // ── Preset
     document.getElementById('preset-select').addEventListener('change', function () {
